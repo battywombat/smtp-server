@@ -1,4 +1,4 @@
-package main
+package smtpserver
 
 import (
 	"bufio"
@@ -22,14 +22,15 @@ const (
 )
 
 // Client stores all the variables related to a single client connection
-type Client struct {
+type client struct {
+	server        *SMTPServer
 	conn          net.Conn
 	in            *bufio.Scanner
 	out           *bufio.Writer
 	isESMTP       bool
 	ip            string
 	inProgress    bool
-	currentLetter *Envelope
+	currentLetter *envelope
 }
 
 type response struct {
@@ -37,21 +38,22 @@ type response struct {
 	message string
 }
 
-// NewClient creates a new client object from a given net.Conn
-func NewClient(conn net.Conn) *Client {
-	cli := &Client{}
+// newClient creates a new client object from a given net.Conn
+func newClient(conn net.Conn, s *SMTPServer) *client {
+	cli := &client{}
 	cli.conn = conn
 	cli.in = bufio.NewScanner(conn)
 	cli.out = bufio.NewWriter(conn)
+	cli.server = s
 	return cli
 }
 
 // Close implements the Closer interface on a client connection object
-func (cli *Client) Close() {
+func (cli *client) Close() {
 	cli.conn.Close()
 }
 
-func (cli *Client) handleHELO(tokens []string) error {
+func (cli *client) handleHELO(tokens []string) error {
 	if len(tokens) < 2 {
 		cli.writeResponse(syntaxError, "No IP provided")
 		return nil
@@ -63,7 +65,7 @@ func (cli *Client) handleHELO(tokens []string) error {
 	return cli.writeResponse(ok, fmt.Sprintf("%v Hello", hostIP[3]))
 }
 
-func (cli *Client) handleMAIL(tokens []string) error {
+func (cli *client) handleMAIL(tokens []string) error {
 	if len(tokens) < 2 {
 		cli.writeResponse(syntaxError, "No sender specified")
 		return nil
@@ -75,13 +77,13 @@ func (cli *Client) handleMAIL(tokens []string) error {
 	}
 	// SMTP standard says that a MAIL command should always reset state
 	// cli.currentLetter = &Envelope{from: strings.Trim(addr[1], "<>")}
-	cli.currentLetter = new(Envelope)
-	cli.currentLetter.from = ParseAddress(addr[1])
+	cli.currentLetter = &envelope{}
+	cli.currentLetter.from = parseAddress(addr[1])
 	cli.writeResponse(ok, "Ok")
 	return nil
 }
 
-func (cli *Client) handleRCPT(tokens []string) error {
+func (cli *client) handleRCPT(tokens []string) error {
 	if len(tokens) < 2 {
 		cli.writeResponse(syntaxError, "No reciver specified")
 		return nil
@@ -91,8 +93,8 @@ func (cli *Client) handleRCPT(tokens []string) error {
 		cli.writeResponse(syntaxError, "No reciver specified")
 		return nil
 	}
-	cli.currentLetter.to = ParseAddress(addr[1])
-	if !mailboxes.IsValidAddress(cli.currentLetter.to) {
+	cli.currentLetter.to = parseAddress(addr[1])
+	if !cli.server.mdir.IsValidAddress(cli.currentLetter.to) {
 		fmt.Printf("Unknown mailbox: %v\n", cli.currentLetter.to)
 		cli.writeResponse(mailboxNotFound, "Can't find mailbox")
 	} else {
@@ -101,10 +103,10 @@ func (cli *Client) handleRCPT(tokens []string) error {
 	return nil
 }
 
-func (cli *Client) handleDATA() (err error) {
+func (cli *client) handleDATA() (err error) {
 	var t []string
 	// need to make sure that we've recieved MAIL TO and RCPT TO messages already
-	if cli.currentLetter == nil || cli.currentLetter.from == (EmailAddress{}) || cli.currentLetter.to == (EmailAddress{}) {
+	if cli.currentLetter == nil || cli.currentLetter.from == (emailAddress{}) || cli.currentLetter.to == (emailAddress{}) {
 		return cli.writeResponse(outOfSequence, "")
 	}
 	err = cli.writeResponse(startMail, "start mail input")
@@ -118,9 +120,9 @@ func (cli *Client) handleDATA() (err error) {
 		}
 		switch t[0] {
 		case "To:":
-			cli.currentLetter.to = ParseAddress(t[1])
+			cli.currentLetter.to = parseAddress(t[1])
 		case "From:":
-			cli.currentLetter.from = ParseAddress(t[1])
+			cli.currentLetter.from = parseAddress(t[1])
 		case "Subject:":
 			cli.currentLetter.subject = strings.Join(t[1:], " ")
 		default: // invalid command
@@ -132,7 +134,7 @@ func (cli *Client) handleDATA() (err error) {
 	return
 }
 
-func (cli *Client) writeResponse(code int, message string) error {
+func (cli *client) writeResponse(code int, message string) error {
 	s := fmt.Sprintf("%v %v \r\n", strconv.Itoa(code), message)
 	if _, err := cli.out.Write([]byte(s)); err != nil {
 		return err
@@ -141,7 +143,7 @@ func (cli *Client) writeResponse(code int, message string) error {
 	return nil
 }
 
-func (cli *Client) nextLine() (s string, err error) {
+func (cli *client) nextLine() (s string, err error) {
 	if !cli.in.Scan() {
 		err = errors.New("Trouble reading from socket")
 	} else {
@@ -150,13 +152,13 @@ func (cli *Client) nextLine() (s string, err error) {
 	return
 }
 
-func (cli *Client) nextTokens() ([]string, error) {
+func (cli *client) nextTokens() ([]string, error) {
 	s, err := cli.nextLine()
 	return strings.Split(s, " "), err
 }
 
 // Handler is the main handler function for a particular client connection
-func (cli *Client) Handler() {
+func (cli *client) Handler() {
 	defer cli.Close()
 	info := fmt.Sprintf("%v %v", softwareName, version)
 	if err := cli.writeResponse(greeting, info); err != nil {
@@ -195,7 +197,7 @@ func (cli *Client) Handler() {
 			if err := cli.handleDATA(); err != nil {
 				fmt.Println("Error responding to DATA: ", err.Error())
 			} else {
-				mailboxes.mchan <- cli.currentLetter
+				cli.server.mdir.mchan <- cli.currentLetter
 			}
 		case "QUIT":
 			cli.writeResponse(quit, "Closing connection")

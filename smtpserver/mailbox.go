@@ -1,4 +1,4 @@
-package main
+package smtpserver
 
 import (
 	"fmt"
@@ -8,57 +8,57 @@ import (
 
 const chanSize = 100
 
-// EmailAddress represents a single address within a
-type EmailAddress struct {
+// emailAddress represents a single address within a
+type emailAddress struct {
 	name   string
 	domain string
 }
 
-func (e EmailAddress) String() string {
+func (e emailAddress) String() string {
 	return fmt.Sprintf("%v@%v", e.name, e.domain)
 }
 
 // Envelope represents a single email
-type Envelope struct {
-	to      EmailAddress
-	from    EmailAddress
+type envelope struct {
+	to      emailAddress
+	from    emailAddress
 	body    string
 	subject string
 }
 
 // Mailbox is the structure that represents a mailbox on this machine.
-type Mailbox struct {
+type mailbox struct {
 	addr      string
-	mail      []*Envelope
+	mail      []*envelope
 	spoolPath string
 }
 
 // A MailDirectory stores all the state of the smtp server, including actual emails
-type MailDirectory struct {
+type mailDirectory struct {
 	sync.RWMutex
-	boxes map[string]*Mailbox
-	mchan chan *Envelope
+	boxes map[string]*mailbox
+	mchan chan *envelope
 }
 
 // NewMailDirectory creates and initalizes a new MailDirectory object
-func NewMailDirectory() *MailDirectory {
-	m := &MailDirectory{
-		boxes: make(map[string]*Mailbox),
-		mchan: make(chan *Envelope, chanSize),
+func newMailDirectory() *mailDirectory {
+	m := &mailDirectory{
+		boxes: make(map[string]*mailbox),
+		mchan: make(chan *envelope, chanSize),
 	}
 	m.AddAddress("Postmaster")
 	return m
 }
 
-func newMailbox() (mbox *Mailbox) {
-	return &Mailbox{
-		mail: make([]*Envelope, 0),
+func newMailbox() (mbox *mailbox) {
+	return &mailbox{
+		mail: make([]*envelope, 0),
 	}
 }
 
 // ParseAddress parses the email address within a string and returns a pointer
 // to the new object
-func ParseAddress(s string) (e EmailAddress) {
+func parseAddress(s string) (e emailAddress) {
 	s = strings.Trim(s, " <>")
 	sep := strings.Split(s, "@")
 	switch len(sep) {
@@ -72,17 +72,17 @@ func ParseAddress(s string) (e EmailAddress) {
 }
 
 // MainLoop is a consumer loop that handles Envelopes that are sent through its channel
-func (m *MailDirectory) MainLoop() {
+func (m *mailDirectory) MainLoop() {
 	fmt.Println("Starting mail loop...")
 	for {
 		mail := <-m.mchan
-		mailboxes.AddMail(mail)
-		fmt.Printf("Current mail for %s: %v", mail.to, mailboxes.GetMail(mail.to))
+		m.AddMail(mail)
+		fmt.Printf("Current mail for %s: %v", mail.to, m.GetMail(mail.to))
 	}
 }
 
 // AddAddress adds an address to this mail server with the addres addr
-func (m *MailDirectory) AddAddress(addr string) {
+func (m *mailDirectory) AddAddress(addr string) {
 	m.Lock()
 	if _, ok := m.boxes[addr]; !ok {
 		m.boxes[addr] = newMailbox()
@@ -91,7 +91,7 @@ func (m *MailDirectory) AddAddress(addr string) {
 }
 
 // AddMail adds the Envelope e to the mailbox specified by addr
-func (m *MailDirectory) AddMail(e *Envelope) {
+func (m *mailDirectory) AddMail(e *envelope) {
 	m.Lock()
 	dest := e.to.name
 	if box, ok := m.boxes[dest]; ok {
@@ -101,7 +101,7 @@ func (m *MailDirectory) AddMail(e *Envelope) {
 }
 
 // GetMail returns all mail recieved by the inbox addr.
-func (m *MailDirectory) GetMail(addr EmailAddress) (e []*Envelope) {
+func (m *mailDirectory) GetMail(addr emailAddress) (e []*envelope) {
 	m.RLock()
 	if box, ok := m.boxes[addr.name]; ok {
 		e = box.mail
@@ -111,7 +111,7 @@ func (m *MailDirectory) GetMail(addr EmailAddress) (e []*Envelope) {
 }
 
 // IsValidAddress returns true if the address given by addr is registered on this domain
-func (m *MailDirectory) IsValidAddress(addr EmailAddress) bool {
+func (m *mailDirectory) IsValidAddress(addr emailAddress) bool {
 	_, ok := m.boxes[addr.name]
 	return ok
 }
