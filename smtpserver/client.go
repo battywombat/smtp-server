@@ -94,8 +94,7 @@ func (cli *client) handleRCPT(tokens []string) error {
 		return nil
 	}
 	cli.currentLetter.to = parseAddress(addr[1])
-	if !cli.server.mdir.IsValidAddress(cli.currentLetter.to) {
-		fmt.Printf("Unknown mailbox: %v\n", cli.currentLetter.to)
+	if id := cli.server.mdir.IsValidAddress(cli.currentLetter.to); id == -1 {
 		cli.writeResponse(mailboxNotFound, "Can't find mailbox")
 	} else {
 		cli.writeResponse(ok, "Ok")
@@ -118,17 +117,20 @@ func (cli *client) handleDATA() (err error) {
 			}
 			continue
 		}
-		switch t[0] {
-		case "To:":
-			cli.currentLetter.to = parseAddress(t[1])
-		case "From:":
-			cli.currentLetter.from = parseAddress(t[1])
-		case "Subject:":
+		if t[0] == "Subject:" {
 			cli.currentLetter.subject = strings.Join(t[1:], " ")
-		default: // invalid command
-			cli.writeResponse(syntaxError, "")
-			return
 		}
+		// switch t[0] {
+		// // case "To:":
+		// // 	cli.currentLetter.to = parseAddress(t[1])
+		// // case "From:":
+		// // 	cli.currentLetter.from = parseAddress(t[1])
+		// case "Subject:":
+		// 	cli.currentLetter.subject = strings.Join(t[1:], " ")
+		// default: // invalid command
+		// 	cli.writeResponse(syntaxError, "")
+		// 	return
+		// }
 	}
 	cli.writeResponse(ok, "ok")
 	return

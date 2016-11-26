@@ -25,7 +25,7 @@ func clientThread() {
 
 	// Connect to the server, authenticate, set the sender and recipient,
 	// and send the email all in one step.
-	to := []string{"recipient@example.net"}
+	to := []string{"recipient@" + domain}
 	msg := []byte("To: recipient@example.net\r\n" +
 		"Subject: discount Gophers!\r\n" +
 		"\r\n" +
@@ -60,9 +60,13 @@ func (s *SMTPServer) DoServer() {
 // NewSMTPServer creates a pointer to an SMTPServer object, and initalizes
 // all of its fields to their default values
 func NewSMTPServer(port int) (s *SMTPServer) {
+	var err error
 	s = &SMTPServer{}
 	s.port = port
-	s.mdir = newMailDirectory()
-	s.mdir.AddAddress("recipient")
+	s.mdir, err = newMailDirectory()
+	if err != nil {
+		return
+	}
+	s.mdir.AddAddress(emailAddress{"recipient", domain})
 	return
 }
