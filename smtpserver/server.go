@@ -59,11 +59,11 @@ func (s *SMTPServer) DoServer() {
 
 // NewSMTPServer creates a pointer to an SMTPServer object, and initalizes
 // all of its fields to their default values
-func NewSMTPServer(port int) (s *SMTPServer) {
+func NewSMTPServer(port int, database string) (s *SMTPServer) {
 	var err error
 	s = &SMTPServer{}
 	s.port = port
-	s.mdir, err = newMailDirectory()
+	s.mdir, err = newMailDirectory(database)
 	if err != nil {
 		return
 	}

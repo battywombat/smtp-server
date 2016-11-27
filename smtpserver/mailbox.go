@@ -15,7 +15,6 @@ import (
 )
 
 const chanSize = 100
-const dbFile = "./mail.db"
 const domain = "localhost"
 
 // emailAddress represents a single address within a
@@ -51,8 +50,8 @@ type mailDirectory struct {
 }
 
 // NewMailDirectory creates and initalizes a new MailDirectory object
-func newMailDirectory() (m *mailDirectory, err error) {
-	if db, err := sql.Open("sqlite3", dbFile); err == nil {
+func newMailDirectory(database string) (m *mailDirectory, err error) {
+	if db, err := sql.Open("sqlite3", database); err == nil {
 		m = &mailDirectory{
 			mchan: make(chan *envelope, chanSize),
 			db:    db,
