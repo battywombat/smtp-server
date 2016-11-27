@@ -29,8 +29,8 @@ func (e emailAddress) String() string {
 
 // envelope represents a single email
 type envelope struct {
-	to      []emailAddress
-	from    emailAddress
+	to      []*emailAddress
+	from    *emailAddress
 	body    string
 	subject string
 }
@@ -60,8 +60,8 @@ func newMailDirectory(database string) (m *mailDirectory, err error) {
 		if s, err := ioutil.ReadFile(path.Join(path.Dir(filename), "schema.sql")); err == nil {
 			db.Exec(string(s))
 		}
-		if id := m.IsValidAddress(emailAddress{"Postmaster", domain}); id == -1 {
-			m.AddAddress(emailAddress{"Postmaster", domain})
+		if id := m.IsValidAddress(&emailAddress{"Postmaster", domain}); id == -1 {
+			m.AddAddress(&emailAddress{"Postmaster", domain})
 		}
 	}
 	return
@@ -75,7 +75,8 @@ func newMailbox() (mbox *mailbox) {
 
 // ParseAddress parses the email address within a string and returns a pointer
 // to the new object
-func parseAddress(s string) (e emailAddress) {
+func parseAddress(s string) (e *emailAddress) {
+	e = &emailAddress{}
 	s = strings.Trim(s, " <>")
 	sep := strings.Split(s, "@")
 	switch len(sep) {
@@ -98,7 +99,7 @@ func (m *mailDirectory) MainLoop() {
 }
 
 // AddAddress adds an address to this mail server with the addres addr
-func (m *mailDirectory) AddAddress(addr emailAddress) (id int) {
+func (m *mailDirectory) AddAddress(addr *emailAddress) (id int) {
 	m.mut.Lock()
 	m.db.Exec("INSERT INTO address(name, domain) VALUES($1, $2)", addr.name, addr.domain)
 	m.mut.Unlock()
@@ -141,7 +142,7 @@ func (m *mailDirectory) GetMail(addr emailAddress) (e []*envelope, err error) {
 	for rows.Next() {
 		if err := rows.Scan(&id, &fromAddr, &toAddr, &subject, &body); err == nil {
 			e = append(e, &envelope{
-				to:      []emailAddress{m.GetAddr(toAddr)},
+				to:      []*emailAddress{m.GetAddr(toAddr)},
 				from:    m.GetAddr(fromAddr),
 				subject: subject,
 				body:    body,
@@ -151,15 +152,15 @@ func (m *mailDirectory) GetMail(addr emailAddress) (e []*envelope, err error) {
 	return
 }
 
-func (m *mailDirectory) GetAddr(id int) emailAddress {
-	e := emailAddress{}
+func (m *mailDirectory) GetAddr(id int) *emailAddress {
+	e := &emailAddress{}
 	row := m.db.QueryRow("SELECT addr, domain FROM address WHERE id=$1", id)
 	row.Scan(&e.name, &e.domain)
 	return e
 }
 
 // IsValidAddress returns true if the address given by addr is registered on this domain
-func (m *mailDirectory) IsValidAddress(addr emailAddress) (id int) {
+func (m *mailDirectory) IsValidAddress(addr *emailAddress) (id int) {
 	m.mut.RLock()
 	err := m.db.QueryRow("SELECT id from address WHERE name=$1 and domain=$2", addr.name, addr.domain).Scan(&id)
 	m.mut.RUnlock()

@@ -67,6 +67,6 @@ func NewSMTPServer(port int, database string) (s *SMTPServer) {
 	if err != nil {
 		return
 	}
-	s.mdir.AddAddress(emailAddress{"recipient", domain})
+	s.mdir.AddAddress(&emailAddress{"recipient", domain})
 	return
 }

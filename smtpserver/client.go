@@ -106,7 +106,7 @@ func (cli *client) handleRCPT(tokens []string) error {
 func (cli *client) handleDATA() (err error) {
 	var t []string
 	// need to make sure that we've recieved MAIL TO and RCPT TO messages already
-	if cli.currentLetter == nil || cli.currentLetter.from == (emailAddress{}) || len(cli.currentLetter.to) == 0 {
+	if cli.currentLetter == nil || cli.currentLetter.from == nil || len(cli.currentLetter.to) == 0 {
 		return cli.writeResponse(outOfSequence, "")
 	}
 	err = cli.writeResponse(startMail, "start mail input")
@@ -129,7 +129,7 @@ func (cli *client) handleRSET() error {
 }
 
 func (cli *client) handleVRFY(tokens []string) error {
-	var addr emailAddress
+	var addr *emailAddress
 	switch {
 	case len(tokens) == 1:
 		addr = parseAddress(tokens[0])
