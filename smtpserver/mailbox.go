@@ -24,7 +24,7 @@ type emailAddress struct {
 }
 
 func (e emailAddress) String() string {
-	return fmt.Sprintf("%v@%v", e.name, e.domain)
+	return fmt.Sprintf("<%v@%v>", e.name, e.domain)
 }
 
 // Envelope represents a single email

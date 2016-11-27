@@ -136,6 +136,31 @@ func (cli *client) handleDATA() (err error) {
 	return
 }
 
+func (cli *client) handleRSET() error {
+	cli.currentLetter = &envelope{}
+	cli.inProgress = false
+	cli.writeResponse(ok, "ok")
+	return nil
+}
+
+func (cli *client) handleVRFY(tokens []string) error {
+	var addr emailAddress
+	switch {
+	case len(tokens) == 1:
+		addr = parseAddress(tokens[0])
+	case len(tokens) == 3 && tokens[0] == "User" && tokens[1] == "Name":
+		addr = parseAddress(tokens[2])
+	default:
+		cli.writeResponse(syntaxError, "Invalid username format")
+	}
+	if cli.server.mdir.IsValidAddress(addr) == -1 {
+		cli.writeResponse(mailboxNotFound, addr.String())
+	} else {
+		cli.writeResponse(ok, addr.String())
+	}
+	return nil
+}
+
 func (cli *client) writeResponse(code int, message string) error {
 	s := fmt.Sprintf("%v %v \r\n", strconv.Itoa(code), message)
 	if _, err := cli.out.Write([]byte(s)); err != nil {
@@ -196,17 +221,39 @@ func (cli *client) Handler() {
 				fmt.Println("error responding to RCPT: ", err.Error())
 			}
 		case "DATA":
+			if len(tokens) > 1 {
+				cli.writeResponse(syntaxError, fmt.Sprintf("Arguments after DATA: %v", tokens[1:]))
+				break
+			}
 			if err := cli.handleDATA(); err != nil {
 				fmt.Println("Error responding to DATA: ", err.Error())
 			} else {
 				cli.server.mdir.mchan <- cli.currentLetter
 			}
+		case "VRFY":
+			if err := cli.handleVRFY(tokens); err != nil {
+				fmt.Println("Error responding to VRFY: ", err.Error())
+			}
+		case "RSET":
+			if len(tokens) > 1 {
+				cli.writeResponse(syntaxError, fmt.Sprintf("Arguments after RSET: %v", tokens[1:]))
+				break
+			}
+			if err := cli.handleRSET(); err != nil {
+				fmt.Println("error responding to RSET: ", err.Error())
+			}
+		case "NOOP":
+			cli.writeResponse(ok, "OK")
 		case "QUIT":
+			if len(tokens) > 1 {
+				cli.writeResponse(syntaxError, fmt.Sprintf("Arguments after QUIT: %v", tokens[1:]))
+				break
+			}
 			cli.writeResponse(quit, "Closing connection")
 			return
 		default:
 			fmt.Println("Error: unrecognized command: ", tokens[0])
-			return
+			cli.writeResponse(syntaxError, fmt.Sprintf("Unrecognized command: %v", tokens[0]))
 		}
 	}
 }
