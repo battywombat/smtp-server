@@ -93,8 +93,9 @@ func (cli *client) handleRCPT(tokens []string) error {
 		cli.writeResponse(syntaxError, "No reciver specified")
 		return nil
 	}
-	cli.currentLetter.to = parseAddress(addr[1])
-	if id := cli.server.mdir.IsValidAddress(cli.currentLetter.to); id == -1 {
+	cli.currentLetter.to = append(cli.currentLetter.to, parseAddress(addr[1]))
+	l := len(cli.currentLetter.to) - 1
+	if id := cli.server.mdir.IsValidAddress(cli.currentLetter.to[l]); id == -1 {
 		cli.writeResponse(mailboxNotFound, "Can't find mailbox")
 	} else {
 		cli.writeResponse(ok, "Ok")
@@ -105,7 +106,7 @@ func (cli *client) handleRCPT(tokens []string) error {
 func (cli *client) handleDATA() (err error) {
 	var t []string
 	// need to make sure that we've recieved MAIL TO and RCPT TO messages already
-	if cli.currentLetter == nil || cli.currentLetter.from == (emailAddress{}) || cli.currentLetter.to == (emailAddress{}) {
+	if cli.currentLetter == nil || cli.currentLetter.from == (emailAddress{}) || len(cli.currentLetter.to) == 0 {
 		return cli.writeResponse(outOfSequence, "")
 	}
 	err = cli.writeResponse(startMail, "start mail input")
@@ -117,20 +118,10 @@ func (cli *client) handleDATA() (err error) {
 			}
 			continue
 		}
-		if t[0] == "Subject:" {
+		switch t[0] {
+		case "Subject:":
 			cli.currentLetter.subject = strings.Join(t[1:], " ")
 		}
-		// switch t[0] {
-		// // case "To:":
-		// // 	cli.currentLetter.to = parseAddress(t[1])
-		// // case "From:":
-		// // 	cli.currentLetter.from = parseAddress(t[1])
-		// case "Subject:":
-		// 	cli.currentLetter.subject = strings.Join(t[1:], " ")
-		// default: // invalid command
-		// 	cli.writeResponse(syntaxError, "")
-		// 	return
-		// }
 	}
 	cli.writeResponse(ok, "ok")
 	return
@@ -184,6 +175,11 @@ func (cli *client) nextTokens() ([]string, error) {
 	return strings.Split(s, " "), err
 }
 
+// Append the Recieved line to the
+func (cli *client) addTimeStamp() {
+
+}
+
 // Handler is the main handler function for a particular client connection
 func (cli *client) Handler() {
 	defer cli.Close()
@@ -229,6 +225,7 @@ func (cli *client) Handler() {
 				fmt.Println("Error responding to DATA: ", err.Error())
 			} else {
 				cli.server.mdir.mchan <- cli.currentLetter
+				cli.currentLetter = &envelope{}
 			}
 		case "VRFY":
 			if err := cli.handleVRFY(tokens); err != nil {

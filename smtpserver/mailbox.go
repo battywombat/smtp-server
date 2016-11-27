@@ -17,7 +17,7 @@ import (
 const chanSize = 100
 const domain = "localhost"
 
-// emailAddress represents a single address within a
+// emailAddress represents an email address (duh)
 type emailAddress struct {
 	name   string
 	domain string
@@ -27,9 +27,9 @@ func (e emailAddress) String() string {
 	return fmt.Sprintf("<%v@%v>", e.name, e.domain)
 }
 
-// Envelope represents a single email
+// envelope represents a single email
 type envelope struct {
-	to      emailAddress
+	to      []emailAddress
 	from    emailAddress
 	body    string
 	subject string
@@ -111,12 +111,14 @@ func (m *mailDirectory) AddMail(e *envelope) {
 	if fromID = m.IsValidAddress(e.from); fromID == -1 {
 		fromID = m.AddAddress(e.from)
 	}
-	if toID = m.IsValidAddress(e.to); toID == -1 {
-		return
+	for _, addr := range e.to {
+		if toID = m.IsValidAddress(addr); toID == -1 {
+			return
+		}
+		m.mut.Lock()
+		m.db.Exec("INSERT INTO emails(from_addr, to_addr, subject, body) VALUES($1, $2, $3, $4)", fromID, toID, e.subject, e.body)
+		m.mut.Unlock()
 	}
-	m.mut.Lock()
-	m.db.Exec("INSERT INTO emails(from_addr, to_addr, subject, body) VALUES($1, $2, $3, $4)", fromID, toID, e.subject, e.body)
-	m.mut.Unlock()
 }
 
 // GetMail returns all mail recieved by the inbox addr.
@@ -139,7 +141,7 @@ func (m *mailDirectory) GetMail(addr emailAddress) (e []*envelope, err error) {
 	for rows.Next() {
 		if err := rows.Scan(&id, &fromAddr, &toAddr, &subject, &body); err == nil {
 			e = append(e, &envelope{
-				to:      m.GetAddr(toAddr),
+				to:      []emailAddress{m.GetAddr(toAddr)},
 				from:    m.GetAddr(fromAddr),
 				subject: subject,
 				body:    body,
