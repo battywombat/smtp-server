@@ -110,20 +110,14 @@ func (cli *client) handleDATA() (err error) {
 		return cli.writeResponse(outOfSequence, "")
 	}
 	err = cli.writeResponse(startMail, "start mail input")
-	for t, err = cli.nextTokens(); err == nil && t[0] != "."; t, err = cli.nextTokens() {
-		if len(t) == 1 && t[0] == "" { // Email body always follows empty line
-			cli.currentLetter.body, err = cli.nextLine()
-			if err != nil {
-				break
-			}
-			continue
-		}
+	for t, err = cli.nextTokens(); err == nil && !(len(t) == 1 && t[0] == "."); t, err = cli.nextTokens() {
 		switch t[0] {
 		case "Subject:":
 			cli.currentLetter.subject = strings.Join(t[1:], " ")
 		}
+		cli.currentLetter.body += strings.Join(t, " ") + "\r\n"
 	}
-	cli.writeResponse(ok, "ok")
+	cli.writeResponse(ok, "OK")
 	return
 }
 
