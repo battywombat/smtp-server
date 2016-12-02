@@ -62,7 +62,7 @@ func (cli *client) handleHELO(tokens []string) error {
 	// I think getting your own hostname can literally never go wrong
 	hostname, _ := os.Hostname()
 	hostIP, _ := net.LookupHost(hostname)
-	return cli.writeResponse(ok, fmt.Sprintf("%v Hello", hostIP[3]))
+	return cli.writeResponse(ok, fmt.Sprintf("%v Hello", hostIP[0]))
 }
 
 func (cli *client) handleMAIL(tokens []string) error {
